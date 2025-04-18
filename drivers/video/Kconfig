@@ -23,6 +23,10 @@ config VIDEO_INIT_PRIORITY
 	help
 	  System initialization priority for video drivers.
 
+config VIDEO_MODE_CONTINUOUS
+	bool "Run video in continuous mode"
+	default y
+
 config VIDEO_BUFFER_POOL_SZ_MAX
 	int "Size of the largest buffer in the video pool"
 	default 1048576

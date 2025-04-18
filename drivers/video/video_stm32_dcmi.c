@@ -22,8 +22,8 @@
 
 LOG_MODULE_REGISTER(video_stm32_dcmi, CONFIG_VIDEO_LOG_LEVEL);
 
-#if CONFIG_VIDEO_BUFFER_POOL_NUM_MAX < 2
-#error "The minimum required number of buffers for video_stm32 is 2"
+#if CONFIG_VIDEO_BUFFER_POOL_NUM_MAX < 2 && defined(CONFIG_VIDEO_MODE_CONTINUOUS)
+#error "The minimum required number of buffers for video_stm32 is 2 in continuous mode"
 #endif
 
 typedef void (*irq_config_func_t)(const struct device *dev);
@@ -68,6 +68,12 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
 	struct video_buffer *vbuf;
 
 	HAL_DCMI_Suspend(hdcmi);
+#if CONFIG_VIDEO_BUFFER_POOL_NUM_MAX < 2
+	/* in single-buffer mode, user must perform an explicit
+	buffer enqueue action (video_enqueue) before each capture */
+	k_fifo_put(&dev_data->fifo_out, dev_data->vbuf);
+	return;
+#endif
 
 	vbuf = k_fifo_get(&dev_data->fifo_in, K_NO_WAIT);
 
@@ -275,9 +281,13 @@ static int video_stm32_dcmi_set_stream(const struct device *dev, bool enable)
 		LOG_ERR("Failed to dequeue a DCMI buffer.");
 		return -ENOMEM;
 	}
-
+#ifdef CONFIG_VIDEO_MODE_CONTINUOUS
 	err = HAL_DCMI_Start_DMA(&data->hdcmi, DCMI_MODE_CONTINUOUS,
 			(uint32_t)data->vbuf->buffer, data->vbuf->bytesused / 4);
+#else
+	err = HAL_DCMI_Start_DMA(&data->hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)data->vbuf->buffer,
+				 data->vbuf->bytesused / 4);
+#endif
 	if (err != HAL_OK) {
 		LOG_ERR("Failed to start DCMI DMA");
 		return -EIO;
